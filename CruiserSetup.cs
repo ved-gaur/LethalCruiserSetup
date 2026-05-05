@@ -1,6 +1,10 @@
 using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
+using ChatCommandAPI;
+using System;
+using System.Collections.Generic;
+using UnityEngine;
 
 namespace CruiserSetup;
 
@@ -17,6 +21,9 @@ public class CruiserSetup : BaseUnityPlugin
         Instance = this;
 
         Patch();
+
+        // Chat Commands
+        _ = new SetupCommand();
 
         Logger.LogInfo($"{MyPluginInfo.PLUGIN_GUID} v{MyPluginInfo.PLUGIN_VERSION} has loaded!");
     }
@@ -35,5 +42,63 @@ public class CruiserSetup : BaseUnityPlugin
         Logger.LogDebug("Unpatching...");
         Harmony?.UnpatchSelf();
         Logger.LogDebug("Finished unpatching!");
+    }
+}
+
+public class SetupCommand : Command
+{
+    public override string Name => "SetupCruiser";
+    public override string[] Commands => [
+        "setup"
+    ];
+    public override string Description => "Places tools onto the Cruiser";
+    public override string[] Syntax => [""];
+    public override bool Hidden => false;
+
+    public override bool Invoke(string[] args, Dictionary<string, string> kwargs, out string? error)
+    {
+        error = null;
+
+        CruiserSetup.Logger.LogDebug("/setup command invoked.");
+
+        try
+        {
+            SetupManager.SetupCruiser();
+
+            ChatCommandAPI.ChatCommandAPI.Print("Cruiser setup complete.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            // CruiserSetup.Logger.LogWarning($"Cruiser setup failed: {ex}");
+            return false;
+        }
+    }
+}
+
+internal static class SetupManager
+{
+    public static void SetupCruiser()
+    {
+        GameObject cruiser = FindCruiserOrThrow();
+
+        CruiserSetup.Logger.LogInfo($"Found cruiser: {cruiser.name}");
+
+        // TODO: SETUP LOGIC
+    }
+
+    private static GameObject FindCruiserOrThrow()
+    {
+        GameObject? cruiser = GameObject.Find("CompanyCruiser(Clone)");
+
+        if (cruiser == null)
+        {
+            throw new InvalidOperationException(
+                "Could not find the cruiser. Is the cruiser spawned?"
+            );
+        }
+
+        return cruiser;
     }
 }
