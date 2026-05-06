@@ -4,23 +4,27 @@ using HarmonyLib;
 using ChatCommandAPI;
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 using System.Linq;
-using UnityEngine.InputSystem.Interactions;
+using UnityEngine;
+using GameNetcodeStuff;
 
 namespace CruiserSetup;
 
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
+[BepInDependency("baer1.ChatCommandAPI", BepInDependency.DependencyFlags.HardDependency)]
 public class CruiserSetup : BaseUnityPlugin
 {
     public static CruiserSetup Instance { get; private set; } = null!;
     internal new static ManualLogSource Logger { get; private set; } = null!;
     internal static Harmony? Harmony { get; set; }
+    internal static CruiserSetupConfig BoundConfig { get; private set; } = null!;
 
     private void Awake()
     {
         Logger = base.Logger;
         Instance = this;
+
+        BoundConfig = new CruiserSetupConfig(Config);
 
         Patch();
 
@@ -50,30 +54,39 @@ public class CruiserSetup : BaseUnityPlugin
 public class SetupCommand : Command
 {
     public override string Name => "SetupCruiser";
-    public override string[] Commands => [
+
+    public override string[] Commands =>
+    [
         "setup"
     ];
-    public override string Description => "Places tools onto the Cruiser";
-    public override string[] Syntax => [""];
+
+    public override string Description => "Places tools onto the Cruiser.";
+
+    public override string[] Syntax =>
+        CruiserSetup.BoundConfig == null
+            ? ["[preset]"]
+            : CruiserSetup.BoundConfig.GetPresetSyntax();
+
     public override bool Hidden => false;
 
     public override bool Invoke(string[] args, Dictionary<string, string> kwargs, out string? error)
     {
         error = null;
 
-        CruiserSetup.Logger.LogDebug("/setup command invoked.");
-
         try
         {
-            SetupManager.SetupCruiser();
+            string? requestedPreset = null;
+            if (args.Length > 0) requestedPreset = string.Join(" ", args);
+            
+            string usedPreset = SetupManager.SetupCruiser(requestedPreset);
 
-            ChatCommandAPI.ChatCommandAPI.Print("Cruiser setup complete.");
+            ChatCommandAPI.ChatCommandAPI.Print($"Cruiser setup complete: {usedPreset}.");
             return true;
         }
         catch (Exception ex)
         {
             error = ex.Message;
-            // CruiserSetup.Logger.LogWarning($"Cruiser setup failed: {ex}");
+            CruiserSetup.Logger.LogWarning($"Cruiser setup failed: {ex}");
             return false;
         }
     }
@@ -81,14 +94,32 @@ public class SetupCommand : Command
 
 internal static class SetupManager
 {
-    public static void SetupCruiser()
+    public static string SetupCruiser(string? requestedPreset = null)
     {
+        CruiserSetup.BoundConfig.Reload();
+
+        string presetName = CruiserSetup.BoundConfig.ResolvePresetOrThrow(requestedPreset);
+
         GameObject cruiser = FindCruiserOrThrow();
-
-        CruiserSetup.Logger.LogInfo($"Found cruiser: {cruiser.name}");
-
-        // Detect tools.
         List<DetectedTool> tools = ToolDetector.FindTools();
+
+        foreach (DetectedTool tool in tools)
+        {
+            string toolName = tool.Item.itemProperties.itemName;
+
+            if (!CruiserSetup.BoundConfig.TryGetLocalPosition(presetName, toolName, out Vector3 localPosition))
+            {
+                continue;
+            }
+
+            CruiserItemMover.MoveToCruiserLocalPosition(
+                tool.Item,
+                cruiser,
+                localPosition
+            );
+        }
+
+        return presetName;
     }
 
     private static GameObject FindCruiserOrThrow()
@@ -120,10 +151,10 @@ internal readonly struct DetectedTool(GrabbableObject item, ToolLocation locatio
 
 internal static class ToolDetector
 {
-    private const string ShipPath = "/Environment/HangarShip";
+    private const string ShipPath = "Environment/HangarShip";
     private const string CruiserPath = "CompanyCruiser(Clone)";
 
-    private static readonly HashSet<string> ToolNames =
+    internal static readonly HashSet<string> ToolNames =
     [
         "Walkie-talkie",
         "Flashlight",
@@ -160,7 +191,7 @@ internal static class ToolDetector
         string rootPath,
         ToolLocation location)
     {
-        GameObject root = GameObject.Find(rootPath);
+        GameObject? root = GameObject.Find(rootPath);
 
         if (root == null)
             return;
@@ -182,6 +213,52 @@ internal static class ToolDetector
         if (item == null || item.itemProperties == null)
             return false;
 
-        return ToolNames.Contains(item.itemProperties.itemName);
+        if (!ToolNames.Contains(item.itemProperties.itemName))
+            return false;
+
+        if (item.isHeld)
+            return false;
+
+        if (item.isPocketed)
+            return false;
+
+        if (item.playerHeldBy != null)
+            return false;
+
+        return true;
+    }
+}
+
+internal static class CruiserItemMover
+{
+    public static void MoveToCruiserLocalPosition(
+        GrabbableObject item,
+        GameObject cruiser,
+        Vector3 localPosition)
+    {
+        if (item == null)
+            throw new InvalidOperationException("Cannot move item because item is null.");
+
+        if (item.NetworkObject == null)
+            throw new InvalidOperationException($"Cannot move {item.name} because it has no NetworkObject.");
+
+        PlayerControllerB? player = (GameNetworkManager.Instance?.localPlayerController) 
+            ?? throw new InvalidOperationException("Could not find local player controller.");
+
+        Vector3 adjustedLocalPosition = localPosition + Vector3.up * item.itemProperties.verticalOffset;
+
+        player.PlaceGrabbableObject(
+            cruiser.transform,
+            adjustedLocalPosition,
+            true,
+            item
+        );
+
+        player.PlaceObjectServerRpc(
+            item.NetworkObject,
+            cruiser,
+            adjustedLocalPosition,
+            true
+        );
     }
 }
