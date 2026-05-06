@@ -20,6 +20,7 @@ internal sealed class CruiserSetupConfig
 {
     private const string GeneralSection = "General";
     private const string DefaultPresetKey = "DefaultPreset";
+    private const string DiscardPileKey = "DiscardPile";
     private const string PresetPrefix = "Preset.";
     private const string DefaultPresetName = "In";
     private const string DisabledValue = "disabled";
@@ -31,6 +32,7 @@ internal sealed class CruiserSetupConfig
         new(StringComparer.OrdinalIgnoreCase);
 
     private ConfigEntry<string> _defaultPreset = null!;
+    private ConfigEntry<string> _discardPile = null!;
 
     private static readonly Dictionary<string, string> DefaultInValues =
         new(StringComparer.OrdinalIgnoreCase)
@@ -68,6 +70,13 @@ internal sealed class CruiserSetupConfig
             DefaultPresetKey,
             DefaultPresetName,
             "The preset used when /setup is run without a preset name."
+        );
+
+        _discardPile = config.Bind(
+            GeneralSection,
+            DiscardPileKey,
+            "1,-0.6,0",
+            $"Cruiser local x,y,z position where unusable cruiser tools are placed. Use '{DisabledValue}' to disable the discard pile."
         );
 
         EnsureDefaultPresetValue();
@@ -122,6 +131,30 @@ internal sealed class CruiserSetupConfig
         }
 
         return presetName;
+    }
+
+    public bool TryGetDiscardPileLocalPosition(out Vector3 localPosition)
+    {
+        localPosition = default;
+
+        string raw = _discardPile.Value.Trim();
+
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        if (IsDisabled(raw))
+            return false;
+
+        if (!TryParseLocalPosition(raw, out localPosition, out string parseError))
+        {
+            CruiserSetup.Logger.LogWarning(
+                $"Invalid config value for {GeneralSection}.{DiscardPileKey}: '{raw}'. {parseError}"
+            );
+
+            return false;
+        }
+
+        return true;
     }
 
     public bool TryGetToolRule(string presetName, string itemName, out CruiserToolRule rule)
@@ -272,6 +305,31 @@ internal sealed class CruiserSetupConfig
     private static bool IsDisabled(string raw)
     {
         return raw.Equals(DisabledValue, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryParseLocalPosition(string raw, out Vector3 localPosition, out string error)
+    {
+        localPosition = default;
+        error = string.Empty;
+
+        string[] parts = raw.Split(',');
+
+        if (parts.Length != 3)
+        {
+            error = "Expected exactly 3 comma-separated values: x,y,z";
+            return false;
+        }
+
+        if (!TryParseFloat(parts[0], out float x) ||
+            !TryParseFloat(parts[1], out float y) ||
+            !TryParseFloat(parts[2], out float z))
+        {
+            error = "x, y, and z must be valid numbers.";
+            return false;
+        }
+
+        localPosition = new Vector3(x, y, z);
+        return true;
     }
 
     private static bool TryParseToolRule(string raw, out CruiserToolRule rule, out string error)

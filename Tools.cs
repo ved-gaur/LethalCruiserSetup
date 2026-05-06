@@ -10,10 +10,15 @@ internal enum ToolLocation
     Cruiser
 }
 
-internal readonly struct DetectedTool(GrabbableObject item, ToolLocation location)
+// usability f.e empty shotgun or empty weed killer is not considered usable
+internal readonly struct DetectedTool(
+    GrabbableObject item,
+    ToolLocation location,
+    bool isUsable)
 {
     public GrabbableObject Item { get; } = item;
     public ToolLocation Location { get; } = location;
+    public bool IsUsable { get; } = isUsable;
 }
 
 internal static class ToolDetector
@@ -73,7 +78,11 @@ internal static class ToolDetector
             if (!IsToolOfInterest(item))
                 continue;
 
-            tools.Add(new DetectedTool(item, location));
+            tools.Add(new DetectedTool(
+                item,
+                location,
+                ToolUsability.IsUsable(item)
+            ));
         }
     }
 
@@ -95,5 +104,39 @@ internal static class ToolDetector
             return false;
 
         return true;
+    }
+}
+
+internal static class ToolUsability
+{
+    public static bool IsUsable(GrabbableObject item)
+    {
+        if (item == null || item.itemProperties == null)
+            return false;
+
+        return item.itemProperties.itemName switch
+        {
+            "Shotgun" => IsUsableShotgun(item),
+            "Weed killer" => IsUsableSprayPaintType(item),
+            "Spray paint" => IsUsableSprayPaintType(item),
+            _ => true
+        };
+    }
+
+    private static bool IsUsableShotgun(GrabbableObject item)
+    {
+        if (item is not ShotgunItem shotgun)
+            return true;
+
+        return shotgun.shellsLoaded > 0;
+    }
+
+    // Spray paint and weed killer
+    private static bool IsUsableSprayPaintType(GrabbableObject item)
+    {
+        if (item is not SprayPaintItem sprayPaintItem)
+            return true;
+
+        return sprayPaintItem.sprayCanTank > 0;
     }
 }

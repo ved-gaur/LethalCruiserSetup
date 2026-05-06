@@ -116,7 +116,28 @@ internal static class SetupManager
 
         int movedCount = 0;
 
-        foreach (IGrouping<string, DetectedTool> group in tools.GroupBy(tool => tool.Item.itemProperties.itemName))
+        if (CruiserSetup.BoundConfig.TryGetDiscardPileLocalPosition(out Vector3 discardPileLocalPosition))
+        {
+            foreach (DetectedTool tool in tools.Where(tool =>
+                tool.Location == ToolLocation.Cruiser &&
+                !tool.IsUsable))
+            {
+                MoveToCruiserLocalPosition(
+                    tool.Item,
+                    cruiser,
+                    discardPileLocalPosition
+                );
+
+                movedCount++;
+            }
+        }
+
+        List<DetectedTool> usableTools =
+        [
+            .. tools.Where(tool => tool.IsUsable)
+        ];
+
+        foreach (IGrouping<string, DetectedTool> group in usableTools.GroupBy(tool => tool.Item.itemProperties.itemName))
         {
             string toolName = group.Key;
 
@@ -184,7 +205,7 @@ internal static class SetupManager
 
         return cruiser;
     }
-    
+
     private static void MoveToCruiserLocalPosition(
         GrabbableObject item,
         GameObject cruiser,
