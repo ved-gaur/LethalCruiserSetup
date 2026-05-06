@@ -7,6 +7,15 @@ using UnityEngine;
 
 namespace CruiserSetup;
 
+internal readonly struct CruiserToolRule(Vector3 localPosition, int minOnShip, int maxOnCruiser)
+{
+    public Vector3 LocalPosition { get; } = localPosition;
+    public int MinOnShip { get; } = minOnShip;
+    public int MaxOnCruiser { get; } = maxOnCruiser;
+
+    public bool IsUnboundedMax => MaxOnCruiser == int.MaxValue;
+}
+
 internal sealed class CruiserSetupConfig
 {
     private const string GeneralSection = "General";
@@ -14,6 +23,7 @@ internal sealed class CruiserSetupConfig
     private const string PresetPrefix = "Preset.";
     private const string DefaultPresetName = "In";
     private const string DisabledValue = "disabled";
+    private const string InfiniteValue = "*";
 
     private readonly ConfigFile _config;
 
@@ -25,26 +35,26 @@ internal sealed class CruiserSetupConfig
     private static readonly Dictionary<string, string> DefaultInValues =
         new(StringComparer.OrdinalIgnoreCase)
         {
-            ["Boombox"] = "-0.5,-0.20,0.40",
-            ["Extension ladder"] = "0.5,-0.20,0.40",
+            ["Boombox"] = "-0.5,-0.20,0.40,0,*",
+            ["Extension ladder"] = "0.5,-0.20,0.40,0,*",
 
-            ["Pro-flashlight"] = "-1.00,1.15,-0.60",
-            ["Kitchen knife"] = "-1.00,1.15,-1.60",
-            ["Weed killer"] = "-1.00,1.15,-2.10",
-            ["Shotgun"] = "-1.00,1.15,-2.55",
+            ["Pro-flashlight"] = "-1.00,1.15,-0.60,1,3",
+            ["Kitchen knife"] = "-1.00,1.15,-1.60,1,1",
+            ["Weed killer"] = "-1.00,1.15,-2.10,1,*",
+            ["Shotgun"] = "-1.00,1.15,-2.55,1,1",
 
-            ["Walkie-talkie"] = "1.00,1.15,-0.60",
+            ["Walkie-talkie"] = "1.00,1.15,-0.60,1,1",
             ["Flashlight"] = "disabled",
-            ["Shovel"] = "1.00,1.15,-2.30",
+            ["Shovel"] = "1.00,1.15,-2.30,1,4",
             ["Zap gun"] = "disabled",
             ["Radar-booster"] = "disabled",
 
-            ["Lockpicker"] = "-1.00,0.35,-1.00",
-            ["Spray paint"] = "-1.00,0.35,-1.60",
-            ["Stun grenade"] = "-1.00,0.35,-2.10",
-            ["TZP-Inhalant"] = "-1.00,0.35,-2.40",
+            ["Lockpicker"] = "-1.00,0.35,-1.00,0,4",
+            ["Spray paint"] = "-1.00,0.35,-1.60,2,4",
+            ["Stun grenade"] = "-1.00,0.35,-2.10,2,4",
+            ["TZP-Inhalant"] = "-1.00,0.35,-2.40,2,4",
 
-            ["Jetpack"] = "1.00,0.35,-1.20"
+            ["Jetpack"] = "1.00,0.35,-1.20,3,1"
         };
 
     public CruiserSetupConfig(ConfigFile config)
@@ -61,7 +71,6 @@ internal sealed class CruiserSetupConfig
         );
 
         EnsureDefaultPresetValue();
-
         RefreshPresetBindings();
 
         config.Save();
@@ -73,7 +82,6 @@ internal sealed class CruiserSetupConfig
         _config.Reload();
 
         EnsureDefaultPresetValue();
-
         RefreshPresetBindings();
     }
 
@@ -116,9 +124,9 @@ internal sealed class CruiserSetupConfig
         return presetName;
     }
 
-    public bool TryGetLocalPosition(string presetName, string itemName, out Vector3 localPosition)
+    public bool TryGetToolRule(string presetName, string itemName, out CruiserToolRule rule)
     {
-        localPosition = default;
+        rule = default;
 
         if (!_presetToolSlots.TryGetValue(presetName, out Dictionary<string, ConfigEntry<string>> presetEntries))
             return false;
@@ -134,7 +142,7 @@ internal sealed class CruiserSetupConfig
         if (IsDisabled(raw))
             return false;
 
-        if (!TryParseLocalPosition(raw, out localPosition, out string parseError))
+        if (!TryParseToolRule(raw, out rule, out string parseError))
         {
             CruiserSetup.Logger.LogWarning(
                 $"Invalid config value for preset '{presetName}', item '{itemName}': '{raw}'. {parseError}"
@@ -250,7 +258,9 @@ internal sealed class CruiserSetupConfig
                 PresetPrefix + presetName,
                 itemName,
                 defaultValue,
-                $"Cruiser local placement for {itemName}. Format: x,y,z. Example: 0.5,1.0,0.2. Use '{DisabledValue}' to skip this item."
+                $"Cruiser setup rule for {itemName}. Format: x,y,z,min (number to leave on ship), max (number to take on cruiser). " +
+                $"Example: 0.5,1.0,0.2,0,1. Use '{InfiniteValue}' for infinite max. " +
+                $"Use '{DisabledValue}' to skip this item."
             );
 
             entries[itemName] = entry;
@@ -264,16 +274,16 @@ internal sealed class CruiserSetupConfig
         return raw.Equals(DisabledValue, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool TryParseLocalPosition(string raw, out Vector3 localPosition, out string error)
+    private static bool TryParseToolRule(string raw, out CruiserToolRule rule, out string error)
     {
-        localPosition = default;
+        rule = default;
         error = string.Empty;
 
         string[] parts = raw.Split(',');
 
-        if (parts.Length != 3)
+        if (parts.Length != 5)
         {
-            error = "Expected exactly 3 comma-separated values: x,y,z";
+            error = "Expected exactly 5 comma-separated values: x,y,z,min,max";
             return false;
         }
 
@@ -281,11 +291,28 @@ internal sealed class CruiserSetupConfig
             !TryParseFloat(parts[1], out float y) ||
             !TryParseFloat(parts[2], out float z))
         {
-            error = "All values must be valid numbers.";
+            error = "x, y, and z must be valid numbers.";
             return false;
         }
 
-        localPosition = new Vector3(x, y, z);
+        if (!TryParseNonNegativeInt(parts[3], out int minOnShip))
+        {
+            error = "min must be a non-negative integer.";
+            return false;
+        }
+
+        if (!TryParseMax(parts[4], out int maxOnCruiser))
+        {
+            error = "max must be a non-negative integer or '*'.";
+            return false;
+        }
+
+        rule = new CruiserToolRule(
+            new Vector3(x, y, z),
+            minOnShip,
+            maxOnCruiser
+        );
+
         return true;
     }
 
@@ -297,5 +324,32 @@ internal sealed class CruiserSetupConfig
             CultureInfo.InvariantCulture,
             out result
         );
+    }
+
+    private static bool TryParseNonNegativeInt(string value, out int result)
+    {
+        if (!int.TryParse(
+                value.Trim(),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out result))
+        {
+            return false;
+        }
+
+        return result >= 0;
+    }
+
+    private static bool TryParseMax(string value, out int result)
+    {
+        string trimmed = value.Trim();
+
+        if (trimmed.Equals(InfiniteValue, StringComparison.OrdinalIgnoreCase))
+        {
+            result = int.MaxValue;
+            return true;
+        }
+
+        return TryParseNonNegativeInt(trimmed, out result);
     }
 }

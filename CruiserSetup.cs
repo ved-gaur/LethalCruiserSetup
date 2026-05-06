@@ -76,11 +76,16 @@ public class SetupCommand : Command
         try
         {
             string? requestedPreset = null;
-            if (args.Length > 0) requestedPreset = string.Join(" ", args);
-            
-            string usedPreset = SetupManager.SetupCruiser(requestedPreset);
 
-            ChatCommandAPI.ChatCommandAPI.Print($"Cruiser setup complete: {usedPreset}.");
+            if (args.Length > 0)
+                requestedPreset = string.Join(" ", args);
+
+            SetupResult result = SetupManager.SetupCruiser(requestedPreset);
+
+            ChatCommandAPI.ChatCommandAPI.Print(
+                $"Cruiser setup complete: {result.PresetName}. Moved {result.MovedCount} item(s)."
+            );
+
             return true;
         }
         catch (Exception ex)
@@ -92,9 +97,15 @@ public class SetupCommand : Command
     }
 }
 
+internal readonly struct SetupResult(string presetName, int movedCount)
+{
+    public string PresetName { get; } = presetName;
+    public int MovedCount { get; } = movedCount;
+}
+
 internal static class SetupManager
 {
-    public static string SetupCruiser(string? requestedPreset = null)
+    public static SetupResult SetupCruiser(string? requestedPreset = null)
     {
         CruiserSetup.BoundConfig.Reload();
 
@@ -103,23 +114,62 @@ internal static class SetupManager
         GameObject cruiser = FindCruiserOrThrow();
         List<DetectedTool> tools = ToolDetector.FindTools();
 
-        foreach (DetectedTool tool in tools)
-        {
-            string toolName = tool.Item.itemProperties.itemName;
+        int movedCount = 0;
 
-            if (!CruiserSetup.BoundConfig.TryGetLocalPosition(presetName, toolName, out Vector3 localPosition))
-            {
+        foreach (IGrouping<string, DetectedTool> group in tools.GroupBy(tool => tool.Item.itemProperties.itemName))
+        {
+            string toolName = group.Key;
+
+            if (!CruiserSetup.BoundConfig.TryGetToolRule(presetName, toolName, out CruiserToolRule rule))
                 continue;
+
+            List<DetectedTool> cruiserTools = [.. group.Where(tool => tool.Location == ToolLocation.Cruiser)];
+
+            List<DetectedTool> shipTools = [.. group.Where(tool => tool.Location == ToolLocation.Ship)];
+
+            int cruiserCount = cruiserTools.Count;
+            int shipCount = shipTools.Count;
+
+            foreach (DetectedTool tool in cruiserTools)
+            {
+                CruiserItemMover.MoveToCruiserLocalPosition(
+                    tool.Item,
+                    cruiser,
+                    rule.LocalPosition
+                );
+
+                movedCount++;
             }
 
-            CruiserItemMover.MoveToCruiserLocalPosition(
-                tool.Item,
-                cruiser,
-                localPosition
-            );
+            if (cruiserCount >= rule.MaxOnCruiser)
+                continue;
+
+            int cruiserCapacity = rule.IsUnboundedMax
+                ? int.MaxValue
+                : rule.MaxOnCruiser - cruiserCount;
+
+            int movableFromShip = shipCount - rule.MinOnShip;
+
+            if (movableFromShip <= 0)
+                continue;
+
+            int shipMoveCount = rule.IsUnboundedMax
+                ? movableFromShip
+                : Math.Min(cruiserCapacity, movableFromShip);
+
+            foreach (DetectedTool tool in shipTools.Take(shipMoveCount))
+            {
+                CruiserItemMover.MoveToCruiserLocalPosition(
+                    tool.Item,
+                    cruiser,
+                    rule.LocalPosition
+                );
+
+                movedCount++;
+            }
         }
 
-        return presetName;
+        return new SetupResult(presetName, movedCount);
     }
 
     private static GameObject FindCruiserOrThrow()
@@ -183,7 +233,9 @@ internal static class ToolDetector
 
         return [.. tools
             .GroupBy(tool => tool.Item)
-            .Select(group => group.First())];
+            .Select(group => group
+                .OrderByDescending(tool => tool.Location == ToolLocation.Cruiser)
+                .First())];
     }
 
     private static void AddToolsFromRoot(
@@ -242,10 +294,11 @@ internal static class CruiserItemMover
         if (item.NetworkObject == null)
             throw new InvalidOperationException($"Cannot move {item.name} because it has no NetworkObject.");
 
-        PlayerControllerB? player = (GameNetworkManager.Instance?.localPlayerController) 
+        PlayerControllerB player = GameNetworkManager.Instance?.localPlayerController
             ?? throw new InvalidOperationException("Could not find local player controller.");
 
-        Vector3 adjustedLocalPosition = localPosition + Vector3.up * item.itemProperties.verticalOffset;
+        Vector3 adjustedLocalPosition =
+            localPosition + Vector3.up * item.itemProperties.verticalOffset;
 
         player.PlaceGrabbableObject(
             cruiser.transform,
