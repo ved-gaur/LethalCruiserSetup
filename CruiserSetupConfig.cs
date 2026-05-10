@@ -170,21 +170,6 @@ internal sealed class CruiserSetupConfig
         return true;
     }
 
-    public bool TryGetItemRule(string presetName, GrabbableObject item, out CruiserToolRule rule)
-    {
-        if (item is ShotgunItem shotgunItem && shotgunItem.shellsLoaded == 1)
-        {
-            return TryGetToolRule(presetName, "Shotgun-1", out rule);
-        }
-
-        if (item is StunGrenadeItem stunGrenadeItem && stunGrenadeItem.hasExploded)
-        {
-            return TryGetToolRule(presetName, "Stun grenade-used", out rule);
-        }
-
-        return TryGetToolRule(presetName, item.itemProperties.itemName, out rule);
-    }
-
     public bool TryGetToolRule(string presetName, string itemName, out CruiserToolRule rule)
     {
         rule = default;

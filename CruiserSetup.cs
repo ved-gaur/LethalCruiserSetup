@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using GameNetcodeStuff;
-using System.Data;
 
 namespace CruiserSetup;
 
@@ -139,11 +138,13 @@ internal static class SetupManager
                 .OrderByDescending(tool => tool.Priority)
         ];
 
-        foreach (IGrouping<string, DetectedTool> group in usableTools.GroupBy(tool => tool.Item.itemProperties.itemName))
+        Dictionary<string, CruiserToolRule> ruleCache = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (IGrouping<string, DetectedTool> group in usableTools.GroupBy(tool => tool.RuleName))
         {
             string toolName = group.Key;
 
-            if (!CruiserSetup.BoundConfig.TryGetToolRule(presetName, toolName, out CruiserToolRule rule))
+            if (!TryGetCachedToolRule(presetName, toolName, ruleCache, out CruiserToolRule rule))
                 continue;
 
             List<DetectedTool> cruiserTools = [.. group.Where(tool => tool.Location == ToolLocation.Cruiser)];
@@ -154,7 +155,7 @@ internal static class SetupManager
 
             foreach (DetectedTool tool in cruiserTools)
             {
-                Vector3 localPosition = GetItemPosition(presetName, rule.LocalPosition, tool.Item);
+                Vector3 localPosition = GetPlacementPosition(presetName, tool, rule, ruleCache);
 
                 MoveToCruiserLocalPosition(
                     tool.Item,
@@ -183,7 +184,7 @@ internal static class SetupManager
 
             foreach (DetectedTool tool in shipTools.Take(shipMoveCount))
             {
-                Vector3 localPosition = GetItemPosition(presetName, rule.LocalPosition, tool.Item);
+                Vector3 localPosition = GetPlacementPosition(presetName, tool, rule, ruleCache);
 
                 MoveToCruiserLocalPosition(
                     tool.Item,
@@ -202,8 +203,8 @@ internal static class SetupManager
                 .FirstOrDefault(tool =>
                     tool.Location == ToolLocation.Cruiser &&
                     tool.Item is RadarBoosterItem);
-            
-            if (cruiserRadar?.Item is RadarBoosterItem radarBoosterItem && 
+
+            if (cruiserRadar?.Item is RadarBoosterItem radarBoosterItem &&
                 !radarBoosterItem.isBeingUsed)
             {
                 radarBoosterItem.UseItemOnClient();
@@ -227,24 +228,35 @@ internal static class SetupManager
         return cruiser;
     }
 
-    // Special case items that need to be adjustd based on their state.
-    private static Vector3 GetItemPosition(string presetName, Vector3 configPosition, GrabbableObject item)
+    private static Vector3 GetPlacementPosition(
+        string presetName,
+        DetectedTool tool,
+        CruiserToolRule fallbackRule,
+        Dictionary<string, CruiserToolRule> ruleCache)
     {
-        if (item is ShotgunItem shotgunItem && shotgunItem.shellsLoaded == 1)
+        if (!tool.PlacementRuleName.Equals(tool.RuleName, StringComparison.OrdinalIgnoreCase) &&
+            TryGetCachedToolRule(presetName, tool.PlacementRuleName, ruleCache, out CruiserToolRule placementRule))
         {
-            CruiserSetup.BoundConfig.TryGetItemRule(presetName, item, out CruiserToolRule rule);
-
-            return rule.LocalPosition;
+            return placementRule.LocalPosition;
         }
 
-        if (item is StunGrenadeItem stunGrenadeItem && stunGrenadeItem.hasExploded)
-        {
-            CruiserSetup.BoundConfig.TryGetItemRule(presetName, item, out CruiserToolRule rule);
+        return fallbackRule.LocalPosition;
+    }
 
-            return rule.LocalPosition;
-        }
+    private static bool TryGetCachedToolRule(
+        string presetName,
+        string toolName,
+        Dictionary<string, CruiserToolRule> ruleCache,
+        out CruiserToolRule rule)
+    {
+        if (ruleCache.TryGetValue(toolName, out rule))
+            return true;
 
-        return configPosition;
+        if (!CruiserSetup.BoundConfig.TryGetToolRule(presetName, toolName, out rule))
+            return false;
+
+        ruleCache[toolName] = rule;
+        return true;
     }
 
     private static void MoveToCruiserLocalPosition(

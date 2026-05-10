@@ -16,12 +16,16 @@ internal readonly struct DetectedTool(
     GrabbableObject item,
     ToolLocation location,
     bool isUsable,
-    int priority)
+    int priority,
+    string ruleName,
+    string placementRuleName)
 {
     public GrabbableObject Item { get; } = item;
     public ToolLocation Location { get; } = location;
     public bool IsUsable { get; } = isUsable;
     public int Priority { get; } = priority;
+    public string RuleName { get; } = ruleName;
+    public string PlacementRuleName { get; } = placementRuleName;
 }
 
 internal static class ToolDetector
@@ -88,7 +92,9 @@ internal static class ToolDetector
                 item,
                 location,
                 ToolUsability.IsUsable(item),
-                ToolPriority.GetPriority(item)
+                ToolPriority.GetPriority(item),
+                ToolRuleNames.GetRuleName(item),
+                ToolRuleNames.GetPlacementRuleName(item)
             ));
         }
     }
@@ -111,6 +117,25 @@ internal static class ToolDetector
             return false;
 
         return true;
+    }
+}
+
+internal static class ToolRuleNames
+{
+    public static string GetRuleName(GrabbableObject item)
+    {
+        return item.itemProperties.itemName;
+    }
+
+    public static string GetPlacementRuleName(GrabbableObject item)
+    {
+        if (item is ShotgunItem shotgun && shotgun.shellsLoaded == 1)
+            return "Shotgun-1";
+
+        if (item is StunGrenadeItem stunGrenade && stunGrenade.hasExploded)
+            return "Stun grenade-used";
+
+        return GetRuleName(item);
     }
 }
 
@@ -174,7 +199,6 @@ internal static class ToolPriority
             _ => 0
         };
     }
-
 
     private static int GetStunGrenadePriority(GrabbableObject item)
     {
