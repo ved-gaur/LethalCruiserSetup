@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -14,11 +15,13 @@ internal enum ToolLocation
 internal readonly struct DetectedTool(
     GrabbableObject item,
     ToolLocation location,
-    bool isUsable)
+    bool isUsable,
+    int priority)
 {
     public GrabbableObject Item { get; } = item;
     public ToolLocation Location { get; } = location;
     public bool IsUsable { get; } = isUsable;
+    public int Priority { get; } = priority;
 }
 
 internal static class ToolDetector
@@ -43,6 +46,7 @@ internal static class ToolDetector
         "Spray paint",
         "Weed killer",
         "Shotgun",
+        "Shotgun-1",
         "Kitchen knife"
     ];
 
@@ -81,7 +85,8 @@ internal static class ToolDetector
             tools.Add(new DetectedTool(
                 item,
                 location,
-                ToolUsability.IsUsable(item)
+                ToolUsability.IsUsable(item),
+                ToolPriority.GetPriority(item)
             ));
         }
     }
@@ -138,5 +143,39 @@ internal static class ToolUsability
             return true;
 
         return sprayPaintItem.sprayCanTank > 0;
+    }
+}
+
+internal static class ToolPriority
+{
+    public static int GetPriority(GrabbableObject item)
+    {
+        if (item == null || item.itemProperties == null)
+            return 0;
+
+        return item.itemProperties.itemName switch
+        {
+            "Shotgun" => GetShotgunPriority(item),
+            "Weed killer" => GetSprayPaintPriority(item),
+            "Spray paint" => GetSprayPaintPriority(item),
+            _ => 0
+        };
+    }
+
+    private static int GetShotgunPriority(GrabbableObject item)
+    {
+        if (item is not ShotgunItem shotgun)
+            return 0;
+
+        return shotgun.shellsLoaded;
+    }
+
+    // Spray paint and weed killer
+    private static int GetSprayPaintPriority(GrabbableObject item)
+    {
+        if (item is not SprayPaintItem sprayPaintItem)
+            return 0;
+
+        return (int)Math.Floor(sprayPaintItem.sprayCanTank);
     }
 }

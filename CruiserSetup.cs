@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using GameNetcodeStuff;
+using System.Data;
 
 namespace CruiserSetup;
 
@@ -135,6 +136,7 @@ internal static class SetupManager
         List<DetectedTool> usableTools =
         [
             .. tools.Where(tool => tool.IsUsable)
+                .OrderByDescending(tool => tool.Priority)
         ];
 
         foreach (IGrouping<string, DetectedTool> group in usableTools.GroupBy(tool => tool.Item.itemProperties.itemName))
@@ -152,10 +154,12 @@ internal static class SetupManager
 
             foreach (DetectedTool tool in cruiserTools)
             {
+                Vector3 localPosition = GetItemPosition(presetName, rule.LocalPosition, tool.Item);
+
                 MoveToCruiserLocalPosition(
                     tool.Item,
                     cruiser,
-                    rule.LocalPosition
+                    localPosition
                 );
 
                 movedCount++;
@@ -179,10 +183,12 @@ internal static class SetupManager
 
             foreach (DetectedTool tool in shipTools.Take(shipMoveCount))
             {
+                Vector3 localPosition = GetItemPosition(presetName, rule.LocalPosition, tool.Item);
+
                 MoveToCruiserLocalPosition(
                     tool.Item,
                     cruiser,
-                    rule.LocalPosition
+                    localPosition
                 );
 
                 movedCount++;
@@ -204,6 +210,19 @@ internal static class SetupManager
         }
 
         return cruiser;
+    }
+
+    // Special case items that need to be adjustd based on their state.
+    private static Vector3 GetItemPosition(string presetName, Vector3 configPosition, GrabbableObject item)
+    {
+        if (item is ShotgunItem shotgunItem && shotgunItem.shellsLoaded == 1)
+        {
+            CruiserSetup.BoundConfig.TryGetItemRule(presetName, item, out CruiserToolRule rule);
+
+            return rule.LocalPosition;
+        }
+
+        return configPosition;
     }
 
     private static void MoveToCruiserLocalPosition(

@@ -44,6 +44,7 @@ internal sealed class CruiserSetupConfig
             ["Kitchen knife"] = "-1.00,1.15,-1.60,1,1",
             ["Weed killer"] = "-1.00,1.15,-2.10,1,*",
             ["Shotgun"] = "-1.00,1.15,-2.55,1,1",
+            ["Shotgun-1"] = "-1.00,1.35,-2.55,0,0",
 
             ["Walkie-talkie"] = "1.00,1.15,-0.60,1,1",
             ["Flashlight"] = "disabled",
@@ -155,6 +156,16 @@ internal sealed class CruiserSetupConfig
         }
 
         return true;
+    }
+
+    public bool TryGetItemRule(string presetName, GrabbableObject item, out CruiserToolRule rule)
+    {
+        if (item is ShotgunItem shotgunItem && shotgunItem.shellsLoaded == 1)
+        {
+            return TryGetToolRule(presetName, "Shotgun-1", out rule);
+        }
+
+        return TryGetToolRule(presetName, item.itemProperties.itemName, out rule);
     }
 
     public bool TryGetToolRule(string presetName, string itemName, out CruiserToolRule rule)
