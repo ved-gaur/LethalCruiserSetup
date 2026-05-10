@@ -195,6 +195,21 @@ internal static class SetupManager
             }
         }
 
+        // Enable radar booster for light source, if requested
+        if (CruiserSetup.BoundConfig._shouldEnableBooster.Value)
+        {
+            DetectedTool? cruiserRadar = ToolDetector.FindTools()
+                .FirstOrDefault(tool =>
+                    tool.Location == ToolLocation.Cruiser &&
+                    tool.Item is RadarBoosterItem);
+            
+            if (cruiserRadar?.Item is RadarBoosterItem radarBoosterItem && 
+                !radarBoosterItem.isBeingUsed)
+            {
+                radarBoosterItem.UseItemOnClient();
+            }
+        }
+
         return new SetupResult(presetName, movedCount);
     }
 

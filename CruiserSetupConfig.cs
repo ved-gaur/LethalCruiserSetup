@@ -33,6 +33,7 @@ internal sealed class CruiserSetupConfig
 
     private ConfigEntry<string> _defaultPreset = null!;
     private ConfigEntry<string> _discardPile = null!;
+    public ConfigEntry<bool> _shouldEnableBooster = null!;
 
     private static readonly Dictionary<string, string> DefaultInValues =
         new(StringComparer.OrdinalIgnoreCase)
@@ -82,6 +83,13 @@ internal sealed class CruiserSetupConfig
             DiscardPileKey,
             "1,-0.6,0",
             $"Cruiser local x,y,z position where unusable cruiser tools are placed. Use '{DisabledValue}' to disable the discard pile."
+        );
+
+        _shouldEnableBooster = config.Bind(
+            GeneralSection,
+            "ShouldEnableBooster",
+            true,
+            "Enable radar boosters to provide light source on the cruiser."
         );
 
         EnsureDefaultPresetValue();
