@@ -60,7 +60,8 @@ internal sealed class CruiserSetupConfig
 
             ["TZP-Inhalant"] = "-1.00,0.35,-2.40,2,4",
 
-            ["Jetpack"] = "1.00,0.35,-1.20,3,1"
+            ["Jetpack"] = "1.00,0.35,-1.20,3,1",
+            ["Key"] = "1.00,0.35,-2.50,2,*"
         };
 
     public CruiserSetupConfig(ConfigFile config)

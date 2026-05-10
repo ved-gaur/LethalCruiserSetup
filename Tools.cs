@@ -48,7 +48,8 @@ internal static class ToolDetector
         "Weed killer",
         "Shotgun",
         "Shotgun-1",
-        "Kitchen knife"
+        "Kitchen knife",
+        "Key"
     ];
 
     public static List<DetectedTool> FindTools()
