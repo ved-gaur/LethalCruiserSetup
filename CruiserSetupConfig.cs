@@ -50,11 +50,14 @@ internal sealed class CruiserSetupConfig
             ["Flashlight"] = "disabled",
             ["Shovel"] = "1.00,1.15,-2.30,1,4",
             ["Zap gun"] = "disabled",
-            ["Radar-booster"] = "disabled",
+            ["Radar-booster"] = "-1,-0.1,0.40,0,*",
 
             ["Lockpicker"] = "-1.00,0.35,-1.00,0,4",
             ["Spray paint"] = "-1.00,0.35,-1.60,2,4",
+
             ["Stun grenade"] = "-1.00,0.35,-2.10,2,4",
+            ["Stun grenade-used"] = "-1.00,0.55,-2.10,2,4",
+
             ["TZP-Inhalant"] = "-1.00,0.35,-2.40,2,4",
 
             ["Jetpack"] = "1.00,0.35,-1.20,3,1"
@@ -163,6 +166,11 @@ internal sealed class CruiserSetupConfig
         if (item is ShotgunItem shotgunItem && shotgunItem.shellsLoaded == 1)
         {
             return TryGetToolRule(presetName, "Shotgun-1", out rule);
+        }
+
+        if (item is StunGrenadeItem stunGrenadeItem && stunGrenadeItem.hasExploded)
+        {
+            return TryGetToolRule(presetName, "Stun grenade-used", out rule);
         }
 
         return TryGetToolRule(presetName, item.itemProperties.itemName, out rule);

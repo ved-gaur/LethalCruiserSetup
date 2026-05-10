@@ -222,6 +222,13 @@ internal static class SetupManager
             return rule.LocalPosition;
         }
 
+        if (item is StunGrenadeItem stunGrenadeItem && stunGrenadeItem.hasExploded)
+        {
+            CruiserSetup.BoundConfig.TryGetItemRule(presetName, item, out CruiserToolRule rule);
+
+            return rule.LocalPosition;
+        }
+
         return configPosition;
     }
 

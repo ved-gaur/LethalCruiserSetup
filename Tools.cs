@@ -37,6 +37,7 @@ internal static class ToolDetector
         "Lockpicker",
         "Pro-flashlight",
         "Stun grenade",
+        "Stun grenade-used",
         "Boombox",
         "TZP-Inhalant",
         "Zap gun",
@@ -124,8 +125,17 @@ internal static class ToolUsability
             "Shotgun" => IsUsableShotgun(item),
             "Weed killer" => IsUsableSprayPaintType(item),
             "Spray paint" => IsUsableSprayPaintType(item),
+            "TZP-Inhalant" => IsUsableTZPInhalant(item),
             _ => true
         };
+    }
+
+    private static bool IsUsableTZPInhalant(GrabbableObject item)
+    {
+        if (item is not TetraChemicalItem tzpInhalant)
+            return true;
+
+        return tzpInhalant.fuel > 0;
     }
 
     private static bool IsUsableShotgun(GrabbableObject item)
@@ -158,8 +168,27 @@ internal static class ToolPriority
             "Shotgun" => GetShotgunPriority(item),
             "Weed killer" => GetSprayPaintPriority(item),
             "Spray paint" => GetSprayPaintPriority(item),
+            "TZP-Inhalant" => GetTZPInhalantPriority(item),
+            "Stun grenade" => GetStunGrenadePriority(item),
             _ => 0
         };
+    }
+
+
+    private static int GetStunGrenadePriority(GrabbableObject item)
+    {
+        if (item is not StunGrenadeItem stunGrenade)
+            return 0;
+
+        return stunGrenade.hasExploded ? 0 : 1;
+    }
+
+    private static int GetTZPInhalantPriority(GrabbableObject item)
+    {
+        if (item is not TetraChemicalItem tzpInhalant)
+            return 0;
+
+        return (int)Math.Floor(tzpInhalant.fuel);
     }
 
     private static int GetShotgunPriority(GrabbableObject item)
