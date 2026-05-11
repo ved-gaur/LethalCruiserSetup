@@ -1,0 +1,10 @@
+{
+  "name": "CruiserSetup",
+  "version_number": "1.0.0",
+  "website_url": "https://github.com/ved-gaur/LethalCruiserSetup",
+  "description": "A configurable mod for placing tools onto the Company Cruiser.",
+  "dependencies": [
+    "BepInEx-BepInExPack-5.4.2305",
+    "baer1-ChatCommandAPI-0.4.1"
+  ]
+}
