@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build release
+        run: dotnet build -c Release --no-restore
+
+      - name: Create package folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package
+          Copy-Item "bin/Release/netstandard2.1/ved-gaur.cruisersetup.dll" "package/CruiserSetup.dll"
+          Copy-Item "README.md" "package/README.md"
+          Copy-Item "manifest.json" "package/manifest.json"
+          Copy-Item "icon.png" "package/icon.png"
+
+      - name: Create zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path package/* -DestinationPath "CruiserSetup-${{ github.ref_name }}.zip" -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CruiserSetup-${{ github.ref_name }}
+          path: CruiserSetup-${{ github.ref_name }}.zip
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: CruiserSetup-${{ github.ref_name }}.zip
+          generate_release_notes: true
