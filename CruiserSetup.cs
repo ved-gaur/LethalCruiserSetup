@@ -112,6 +112,8 @@ internal static class SetupManager
         string presetName = CruiserSetup.BoundConfig.ResolvePresetOrThrow(requestedPreset);
 
         GameObject cruiser = FindCruiserOrThrow();
+        EnsureCruiserIsMagnetized(cruiser);
+
         List<DetectedTool> tools = ToolDetector.FindTools();
 
         int movedCount = 0;
@@ -228,6 +230,17 @@ internal static class SetupManager
         return cruiser;
     }
 
+    private static void EnsureCruiserIsMagnetized(GameObject cruiser)
+    {
+        if (!cruiser.TryGetComponent(out VehicleController vehicleController) ||
+            !vehicleController.magnetedToShip)
+        {
+            throw new InvalidOperationException(
+                "Cruiser is not magnetized."
+            );
+        }
+    }
+    
     private static Vector3 GetPlacementPosition(
         string presetName,
         DetectedTool tool,
